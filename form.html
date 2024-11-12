@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Image</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+</head>
+<body>
+    <h1>Upload Image</h1>
+    <form id="uploadForm" enctype="multipart/form-data">
+        <input type="file" name="file" id="file" accept="image/*">
+        <button type="submit">Upload</button>
+    </form>
+
+    <script>
+        $(document).ready(function() {
+            $('#uploadForm').on('submit', function(event) {
+                event.preventDefault();
+
+                var formData = new FormData(this);
+                $.ajax({
+                    url: 'http://127.0.0.1:5000/upload',
+                    type: 'POST',
+                    data: formData,
+                    contentType: false,
+                    processData: false,
+                    success: function(response) {
+                        alert('File successfully uploaded');
+                        console.log(response.results);
+                    },
+                    error: function(response) {
+                        alert('Failed to upload file');
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

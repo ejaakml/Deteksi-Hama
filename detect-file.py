@@ -1,33 +1,3 @@
-# YOLOv5 🚀 by Ultralytics, AGPL-3.0 license
-"""
-Run YOLOv5 detection inference on images, videos, directories, globs, YouTube, webcam, streams, etc.
-
-Usage - sources:
-    $ python detect.py --weights yolov5s.pt --source 0                               # webcam
-                                                     img.jpg                         # image
-                                                     vid.mp4                         # video
-                                                     screen                          # screenshot
-                                                     path/                           # directory
-                                                     list.txt                        # list of images
-                                                     list.streams                    # list of streams
-                                                     'path/*.jpg'                    # glob
-                                                     'https://youtu.be/LNwODJXcvt4'  # YouTube
-                                                     'rtsp://example.com/media.mp4'  # RTSP, RTMP, HTTP stream
-
-Usage - formats:
-    $ python detect.py --weights yolov5s.pt                 # PyTorch
-                                 yolov5s.torchscript        # TorchScript
-                                 yolov5s.onnx               # ONNX Runtime or OpenCV DNN with --dnn
-                                 yolov5s_openvino_model     # OpenVINO
-                                 yolov5s.engine             # TensorRT
-                                 yolov5s.mlmodel            # CoreML (macOS-only)
-                                 yolov5s_saved_model        # TensorFlow SavedModel
-                                 yolov5s.pb                 # TensorFlow GraphDef
-                                 yolov5s.tflite             # TensorFlow Lite
-                                 yolov5s_edgetpu.tflite     # TensorFlow Edge TPU
-                                 yolov5s_paddle_model       # PaddlePaddle
-"""
-
 import argparse
 import csv
 import os
@@ -37,7 +7,7 @@ from pathlib import Path
 
 import torch
 
-# conn db ===============
+# Database connection setup
 import mysql.connector
 
 mydb = mysql.connector.connect(
@@ -56,10 +26,9 @@ INSERT INTO hama (nama, deskripsi)
 VALUES (%s, %s)
 """
 
-# ===========================
+# Fix pathlib for different OS
 import pathlib
-temp = pathlib.PosixPath
-pathlib.PosixPath = pathlib.WindowsPath
+pathlib.PosixPath = pathlib.WindowsPath if os.name == 'nt' else pathlib.PosixPath
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
@@ -215,32 +184,19 @@ def run(
             imc = im0.copy() if save_crop else im0  # for save_crop
             annotator = Annotator(im0, line_width=line_thickness, example=str(names))
             if len(det):
-                # Rescale boxes from img_size to im0 size
-                det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()
-
-                # Print results
-                for c in det[:, 5].unique():
-                    n = (det[:, 5] == c).sum()  # detections per class
-                    s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
+                det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()  # xyxy2xywh
 
                 # Write results
                 for *xyxy, conf, cls in reversed(det):
-                    c = int(cls)  # integer class
-                    label = names[c] if hide_conf else f"{names[c]}"
-                    confidence = float(conf)
-                    confidence_str = f"{confidence:.2f}"
-
-                    cursor.execute(insert_query, (label, p.name))
-                    mydb.commit()
-
-                    if save_csv:
-                        write_to_csv(p.name, label, confidence_str)
-
                     if save_txt:  # Write to file
                         xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
                         line = (cls, *xywh, conf) if save_conf else (cls, *xywh)  # label format
                         with open(f"{txt_path}.txt", "a") as f:
                             f.write(("%g " * len(line)).rstrip() % line + "\n")
+
+                    if save_csv:
+                        # Write to CSV
+                        write_to_csv(p.name, names[int(cls)], f"{conf:.2f}")
 
                     if save_img or save_crop or view_img:  # Add bbox to image
                         c = int(cls)  # integer class
@@ -254,7 +210,7 @@ def run(
             if view_img:
                 if platform.system() == "Linux" and p not in windows:
                     windows.append(p)
-                    cv2.namedWindow(str(p), cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)  # allow window resize (Linux)
+                    cv2.namedWindow(str(p), cv2.WINDOW_NORMAL)
                     cv2.resizeWindow(str(p), im0.shape[1], im0.shape[0])
                 cv2.imshow(str(p), im0)
                 cv2.waitKey(1)  # 1 millisecond
@@ -274,32 +230,28 @@ def run(
                             h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                         else:  # stream
                             fps, w, h = 30, im0.shape[1], im0.shape[0]
-                        save_path = str(Path(save_path).with_suffix(".mp4"))  # force *.mp4 suffix on results videos
-                        vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
+                            save_path += ".mp4"
+                        vid_writer[i] = cv2.VideoWriter(
+                            save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h)
+                        )
                     vid_writer[i].write(im0)
 
-        if (0xFF) == ord("q"):
-            cv2.destroyAllWindows()
-            break
         # Print time (inference-only)
         LOGGER.info(f"{s}{'' if len(det) else '(no detections), '}{dt[1].dt * 1E3:.1f}ms")
-    
+
     # Print results
-    t = tuple(x.t / seen * 1e3 for x in dt)  # speeds per image
-    LOGGER.info(f"Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {(1, 3, *imgsz)}" % t)
+    t = tuple(x.t / seen * 1E3 for x in dt)  # speeds per image
+    LOGGER.info(f"Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {imgsz}" % t)
     if save_txt or save_img:
         s = f"\n{len(list(save_dir.glob('labels/*.txt')))} labels saved to {save_dir / 'labels'}" if save_txt else ""
         LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")
     if update:
-        strip_optimizer(weights[0])  # update model (to fix SourceChangeWarning)
-    
-
+        strip_optimizer(weights)  # update model (to fix SourceChangeWarning)
 
 def parse_opt():
-    """Parses command-line arguments for YOLOv5 detection, setting inference options and model configurations."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--weights", nargs="+", type=str, default=ROOT / "best (3).pt", help="model path or triton URL")
-    parser.add_argument("--source", type=str, default=ROOT / "0", help="file/dir/URL/glob/screen/0(webcam)")
+    parser.add_argument("--weights", nargs="+", type=str, default=ROOT / "yolov5s.pt", help="model path or triton URL")
+    parser.add_argument("--source", type=str, default=ROOT / "data/images", help="file/dir/URL/glob/screen/0(webcam)")
     parser.add_argument("--data", type=str, default=ROOT / "data/coco128.yaml", help="(optional) dataset.yaml path")
     parser.add_argument("--imgsz", "--img", "--img-size", nargs="+", type=int, default=[640], help="inference size h,w")
     parser.add_argument("--conf-thres", type=float, default=0.25, help="confidence threshold")
@@ -312,7 +264,7 @@ def parse_opt():
     parser.add_argument("--save-conf", action="store_true", help="save confidences in --save-txt labels")
     parser.add_argument("--save-crop", action="store_true", help="save cropped prediction boxes")
     parser.add_argument("--nosave", action="store_true", help="do not save images/videos")
-    parser.add_argument("--classes", nargs="+", type=int, help="filter by class: --classes 0, or --classes 0 2 3")
+    parser.add_argument("--classes", nargs="+", type=int, help="filter by class: --class 0, or --class 0 2 3")
     parser.add_argument("--agnostic-nms", action="store_true", help="class-agnostic NMS")
     parser.add_argument("--augment", action="store_true", help="augmented inference")
     parser.add_argument("--visualize", action="store_true", help="visualize features")
@@ -328,44 +280,12 @@ def parse_opt():
     parser.add_argument("--vid-stride", type=int, default=1, help="video frame-rate stride")
     opt = parser.parse_args()
     opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand
-    print_args(vars(opt))
+    print_args(FILE.stem, opt)
     return opt
 
-
 def main(opt):
-    """Executes YOLOv5 model inference with given options, checking requirements before running the model."""
-    check_requirements(ROOT / "requirements.txt", exclude=("tensorboard", "thop"))
+    check_requirements(exclude=("tensorboard", "thop"))
     run(**vars(opt))
-
-def yolo_detect(weights, source, imgsz=640, conf_thres=0.25, iou_thres=0.45, max_det=1000, device='', save_img=False):
-    device = select_device(device)
-    model = DetectMultiBackend(weights, device=device, dnn=False)
-    stride, names, pt = model.stride, model.names, model.pt
-    imgsz = check_img_size(imgsz, s=stride)
-
-    dataset = LoadImages(source, img_size=imgsz, stride=stride, auto=pt)
-    results = []
-
-    model.warmup(imgsz=(1, 3, *imgsz))
-    for path, im, im0s, _, _ in dataset:
-        im = torch.from_numpy(im).to(device)
-        im = im.half() if model.fp16 else im.float()
-        im /= 255
-        if len(im.shape) == 3:
-            im = im[None]
-        pred = model(im, augment=False, visualize=False)
-        pred = non_max_suppression(pred, conf_thres, iou_thres, max_det=max_det)
-        for det in pred:
-            if len(det):
-                det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0s.shape).round()
-                for *xyxy, conf, cls in reversed(det):
-                    label = f'{names[int(cls)]} {conf:.2f}'
-                    results.append({
-                        "label": names[int(cls)],
-                        "confidence": float(conf),
-                        "bbox": [float(xy) for xy in xyxy]
-                    })
-    return results
 
 if __name__ == "__main__":
     opt = parse_opt()

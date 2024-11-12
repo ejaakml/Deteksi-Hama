@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hama Data</title>
+    <!-- jQuery CDN -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        table, th, td {
+            border: 1px solid black;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <!-- <a href="./form.html">tambah data</a> -->
+    <button id="camera">Camera</button>
+    <h1>Hama Data</h1>
+    <table id="hamaTable">
+        <thead>
+            <tr>
+                <th>Number</th>
+                <th>Nama</th>
+                <th>Deskripsi</th>
+                <th>Gambar</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Data will be populated here -->
+        </tbody>
+    </table>
+
+    <script>
+        $(document).ready(function() {
+        
+        function fetchData() {
+            $.ajax({
+                url: 'http://127.0.0.1:5000/hama',
+                method: 'GET',
+                success: function(data) {
+                    var hamaTable = $('#hamaTable tbody');
+                    var number = 1
+                    hamaTable.empty()
+                    data.forEach(function(hama, index) {
+                        var row = `<tr>
+                            <td>${number + index}</td>
+                            <td>${hama.nama}</td>
+                            <td>${hama.deskripsi}</td>
+                            <td><img src="${hama.img}" alt="${hama.nama}" width="100"></td>
+                        </tr>`;
+                        hamaTable.append(row);
+                    });
+                },
+                error: function(error) {
+                    console.log('Error fetching data', error);
+                }
+            });
+        }
+
+        fetchData();
+        setInterval(fetchData, 1000); //10 detik;
+          
+
+        $('#camera').click(function (e) {
+            $.ajax({
+                url: 'http://127.0.0.1:5001/camera',
+                method: 'GET',
+                success: function(data) {
+                },
+            });
+        })
+        });
+    </script>
+</body>
+</html>
